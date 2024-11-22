@@ -70,41 +70,47 @@ class InterfaceEstoque:
         self.root.title("Gerenciador de Estoque")
 
         self.label_nome = tk.Label(root, text="Nome do Produto:")
-        self.label_nome.grid(row=0, column=0)
+        self.label_nome.grid(row=0, column=0, sticky="w", padx=5, pady=5)
         self.entry_nome = tk.Entry(root)
-        self.entry_nome.grid(row=0, column=1)
+        self.entry_nome.grid(row=0, column=1, sticky="we", padx=5, pady=5)
 
         self.label_quantidade = tk.Label(root, text="Quantidade:")
-        self.label_quantidade.grid(row=1, column=0)
+        self.label_quantidade.grid(row=1, column=0, sticky="w", padx=5, pady=5)
         self.entry_quantidade = tk.Entry(root)
-        self.entry_quantidade.grid(row=1, column=1)
+        self.entry_quantidade.grid(row=1, column=1, sticky="we", padx=5, pady=5)
 
         self.label_preco = tk.Label(root, text="Preço:")
-        self.label_preco.grid(row=2, column=0)
+        self.label_preco.grid(row=2, column=0, sticky="w", padx=5, pady=5)
         self.entry_preco = tk.Entry(root)
-        self.entry_preco.grid(row=2, column=1)
+        self.entry_preco.grid(row=2, column=1, sticky="we", padx=5, pady=5)
 
         self.btn_cadastrar = tk.Button(root, text="Cadastrar Produto", command=self.cadastrar_produto)
-        self.btn_cadastrar.grid(row=3, column=0, columnspan=2)
+        self.btn_cadastrar.grid(row=3, column=0, columnspan=2, sticky="we", padx=5, pady=5)
 
         self.btn_checar = tk.Button(root, text="Checar Estoque", command=self.checar_estoque)
-        self.btn_checar.grid(row=4, column=0, columnspan=2)
+        self.btn_checar.grid(row=4, column=0, columnspan=2, sticky="we", padx=5, pady=5)
 
         self.btn_vender = tk.Button(root, text="Atualizar Estoque para Venda", command=self.atualizar_estoque_venda)
-        self.btn_vender.grid(row=5, column=0, columnspan=2)
+        self.btn_vender.grid(row=5, column=0, columnspan=2, sticky="we", padx=5, pady=5)
 
         self.btn_adicionar = tk.Button(root, text="Adicionar ao Estoque", command=self.adicionar_estoque)
-        self.btn_adicionar.grid(row=6, column=0, columnspan=2)
+        self.btn_adicionar.grid(row=6, column=0, columnspan=2, sticky="we", padx=5, pady=5)
 
         self.btn_listar = tk.Button(root, text="Listar Estoque", command=self.listar_estoque)
-        self.btn_listar.grid(row=7, column=0, columnspan=2)
+        self.btn_listar.grid(row=7, column=0, columnspan=2, sticky="we", padx=5, pady=5)
+
+        # Configuração de redimensionamento
+        self.root.grid_columnconfigure(0, weight=1)  # Coluna 0 redimensionável
+        self.root.grid_columnconfigure(1, weight=2)  # Coluna 1 mais redimensionável
+
+        for i in range(8):  # Configura todas as linhas para redimensionar
+            self.root.grid_rowconfigure(i, weight=1)
 
     def cadastrar_produto(self):
         nome = self.entry_nome.get()
         quantidade = self.entry_quantidade.get()
         preco = self.entry_preco.get()
 
-        # Verificação dos campos de entrada
         if not nome or not quantidade or not preco:
             messagebox.showerror("Erro", "Todos os campos devem ser preenchidos.")
             return
@@ -160,5 +166,6 @@ class InterfaceEstoque:
 
 if __name__ == "__main__":
     root = tk.Tk()
+    root.geometry("400x300")  # Tamanho inicial
     interface = InterfaceEstoque(root)
     root.mainloop()
