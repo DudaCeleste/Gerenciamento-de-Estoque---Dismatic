@@ -1,5 +1,8 @@
 import tkinter as tk
 from tkinter import messagebox
+import pandas as pd
+import openpyxl
+import os  # Para abrir o arquivo Excel no sistema operacional
 
 class Produto:
     def __init__(self, nome, quantidade, preco):
@@ -23,13 +26,36 @@ class Produto:
 
 class GerenciadorEstoque:
     def __init__(self):
-        self.produtos = {}
+        self.estoque_file = 'estoque.xlsx'
+        self.produtos = self.carregar_estoque()
+
+    def carregar_estoque(self):
+        """Carregar o estoque do arquivo Excel"""
+        try:
+            df = pd.read_excel(self.estoque_file, engine='openpyxl')
+            produtos = {row['Nome']: Produto(row['Nome'], row['Quantidade'], row['Preço']) for _, row in df.iterrows()}
+            return produtos
+        except FileNotFoundError:
+            messagebox.showinfo("Aviso", "Arquivo de estoque não encontrado. Criando um novo.")
+            return {}
+
+    def salvar_estoque(self):
+        """Salvar o estoque no arquivo Excel"""
+        data = {
+            'Nome': [produto.nome for produto in self.produtos.values()],
+            'Quantidade': [produto.quantidade for produto in self.produtos.values()],
+            'Preço': [produto.preco for produto in self.produtos.values()]
+        }
+        df = pd.DataFrame(data)
+        
+        df.to_excel(self.estoque_file, index=False, engine='openpyxl')
 
     def cadastrar_produto(self, nome, quantidade, preco):
         if nome in self.produtos:
             messagebox.showinfo("Erro", "Produto já cadastrado.")
             return
         self.produtos[nome] = Produto(nome, quantidade, preco)
+        self.salvar_estoque()
         messagebox.showinfo("Sucesso", "Produto cadastrado com sucesso.")
 
     def checar_estoque(self, nome):
@@ -43,6 +69,7 @@ class GerenciadorEstoque:
         produto = self.produtos.get(nome)
         if produto:
             if produto.remover_estoque(quantidade):
+                self.salvar_estoque()
                 messagebox.showinfo("Sucesso", f"Venda realizada. Estoque atualizado: {produto.quantidade} unidades restantes.")
         else:
             messagebox.showinfo("Erro", "Produto não encontrado.")
@@ -51,6 +78,7 @@ class GerenciadorEstoque:
         produto = self.produtos.get(nome)
         if produto:
             produto.adicionar_estoque(quantidade)
+            self.salvar_estoque()
             messagebox.showinfo("Sucesso", f"Estoque atualizado. Novo estoque: {produto.quantidade} unidades.")
         else:
             messagebox.showinfo("Erro", "Produto não encontrado.")
@@ -61,6 +89,29 @@ class GerenciadorEstoque:
             return
         estoque = "Estoque atual:\n" + "\n".join(str(produto) for produto in self.produtos.values())
         messagebox.showinfo("Estoque", estoque)
+
+    def exportar_estoque_excel(self):
+        """Exportar o estoque atual para um arquivo Excel"""
+        data = {
+            'Nome': [produto.nome for produto in self.produtos.values()],
+            'Quantidade': [produto.quantidade for produto in self.produtos.values()],
+            'Preço': [produto.preco for produto in self.produtos.values()]
+        }
+        df = pd.DataFrame(data)
+
+        try:
+            df.to_excel('estoque_exportado.xlsx', index=False, engine='openpyxl')
+            messagebox.showinfo("Sucesso", "Estoque exportado para 'estoque_exportado.xlsx'.")
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao exportar o estoque: {e}")
+
+    def abrir_excel(self):
+        """Abrir o arquivo Excel exportado"""
+        try:
+            # Tenta abrir o arquivo Excel no sistema operacional padrão
+            os.startfile('estoque_exportado.xlsx')
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao abrir o arquivo Excel: {e}")
 
 
 class InterfaceEstoque:
@@ -99,11 +150,19 @@ class InterfaceEstoque:
         self.btn_listar = tk.Button(root, text="Listar Estoque", command=self.listar_estoque)
         self.btn_listar.grid(row=7, column=0, columnspan=2, sticky="we", padx=5, pady=5)
 
+        # Botão para exportar para Excel
+        self.btn_exportar = tk.Button(root, text="Exportar para Excel", command=self.exportar_excel)
+        self.btn_exportar.grid(row=8, column=0, columnspan=2, sticky="we", padx=5, pady=5)
+
+        # Botão para abrir o arquivo Excel
+        self.btn_abrir_excel = tk.Button(root, text="Abrir Excel", command=self.abrir_excel)
+        self.btn_abrir_excel.grid(row=9, column=0, columnspan=2, sticky="we", padx=5, pady=5)
+
         # Configuração de redimensionamento
         self.root.grid_columnconfigure(0, weight=1)  # Coluna 0 redimensionável
         self.root.grid_columnconfigure(1, weight=2)  # Coluna 1 mais redimensionável
 
-        for i in range(8):  # Configura todas as linhas para redimensionar
+        for i in range(10):  # Configura todas as linhas para redimensionar
             self.root.grid_rowconfigure(i, weight=1)
 
     def cadastrar_produto(self):
@@ -163,9 +222,15 @@ class InterfaceEstoque:
     def listar_estoque(self):
         self.gerenciador.listar_estoque()
 
+    def exportar_excel(self):
+        self.gerenciador.exportar_estoque_excel()
+
+    def abrir_excel(self):
+        self.gerenciador.abrir_excel()
+
 
 if __name__ == "__main__":
     root = tk.Tk()
-    root.geometry("400x300")  # Tamanho inicial
+    root.geometry("400x400")  # Ajustado para o novo botão
     interface = InterfaceEstoque(root)
     root.mainloop()
