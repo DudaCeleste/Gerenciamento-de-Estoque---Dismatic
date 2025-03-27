@@ -1,11 +1,14 @@
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import messagebox, ttk
 import pandas as pd
 import openpyxl
-import os  # Para abrir o arquivo Excel no sistema operacional
+import os
+import sys
+from datetime import datetime
 
 class Produto:
-    def __init__(self, nome, quantidade, preco):
+    def __init__(self, id, nome, quantidade, preco):
+        self.id = id
         self.nome = nome
         self.quantidade = quantidade
         self.preco = preco
@@ -21,65 +24,97 @@ class Produto:
         return True
 
     def __str__(self):
-        return f"Produto: {self.nome}, Quantidade: {self.quantidade}, Preço: R${self.preco:.2f}"
+        return f"ID: {self.id} | Produto: {self.nome} | Quantidade: {self.quantidade} | Preço: R${self.preco:.2f}"
 
 
 class GerenciadorEstoque:
     def __init__(self):
         self.estoque_file = 'estoque.xlsx'
         self.produtos = self.carregar_estoque()
+        self.proximo_id = self.calcular_proximo_id()
+
+    def calcular_proximo_id(self):
+        if not self.produtos:
+            return 1
+        return max(int(p.id) for p in self.produtos.values()) + 1
 
     def carregar_estoque(self):
-        """Carregar o estoque do arquivo Excel"""
         try:
-            df = pd.read_excel(self.estoque_file, engine='openpyxl')
-            produtos = {row['Nome']: Produto(row['Nome'], row['Quantidade'], row['Preço']) for _, row in df.iterrows()}
-            return produtos
-        except FileNotFoundError:
-            messagebox.showinfo("Aviso", "Arquivo de estoque não encontrado. Criando um novo.")
+            if os.path.exists(self.estoque_file):
+                df = pd.read_excel(self.estoque_file, engine='openpyxl')
+                produtos = {}
+                for _, row in df.iterrows():
+                    produtos[row['Id']] = Produto(row['Id'], row['Nome'], row['Quantidade'], row['Preço'])
+                return produtos
+            return {}
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao carregar estoque: {str(e)}")
             return {}
 
     def salvar_estoque(self):
-        """Salvar o estoque no arquivo Excel"""
+        if not self.produtos:
+            return
+            
         data = {
+            'Id': [produto.id for produto in self.produtos.values()],
             'Nome': [produto.nome for produto in self.produtos.values()],
             'Quantidade': [produto.quantidade for produto in self.produtos.values()],
             'Preço': [produto.preco for produto in self.produtos.values()]
         }
         df = pd.DataFrame(data)
         
-        df.to_excel(self.estoque_file, index=False, engine='openpyxl')
+        try:
+            df.to_excel(self.estoque_file, index=False, engine='openpyxl')
+        except Exception as e:
+            messagebox.showerror("Erro", f"Falha ao salvar estoque: {str(e)}")
+
+    def gerar_novo_id(self):
+        novo_id = self.proximo_id
+        self.proximo_id += 1
+        return novo_id
 
     def cadastrar_produto(self, nome, quantidade, preco):
-        if nome in self.produtos:
+        id = str(self.gerar_novo_id())
+        if any(p.nome.lower() == nome.lower() for p in self.produtos.values()):
             messagebox.showinfo("Erro", "Produto já cadastrado.")
-            return
-        self.produtos[nome] = Produto(nome, quantidade, preco)
-        self.salvar_estoque()
-        messagebox.showinfo("Sucesso", "Produto cadastrado com sucesso.")
-
-    def checar_estoque(self, nome):
-        produto = self.produtos.get(nome)
-        if produto:
-            messagebox.showinfo("Estoque", str(produto))
-        else:
-            messagebox.showinfo("Erro", "Produto não encontrado.")
-
-    def atualizar_estoque_venda(self, nome, quantidade):
-        produto = self.produtos.get(nome)
-        if produto:
-            if produto.remover_estoque(quantidade):
-                self.salvar_estoque()
-                messagebox.showinfo("Sucesso", f"Venda realizada. Estoque atualizado: {produto.quantidade} unidades restantes.")
-        else:
-            messagebox.showinfo("Erro", "Produto não encontrado.")
-
-    def adicionar_estoque(self, nome, quantidade):
-        produto = self.produtos.get(nome)
-        if produto:
-            produto.adicionar_estoque(quantidade)
+            return False
+            
+        try:
+            self.produtos[id] = Produto(id, nome, int(quantidade), float(preco))
             self.salvar_estoque()
-            messagebox.showinfo("Sucesso", f"Estoque atualizado. Novo estoque: {produto.quantidade} unidades.")
+            messagebox.showinfo("Sucesso", f"Produto cadastrado com sucesso. ID: {id}")
+            return id
+        except ValueError:
+            messagebox.showerror("Erro", "Quantidade deve ser inteiro e preço deve ser número decimal.")
+            return None
+
+    def buscar_por_id(self, id):
+        return self.produtos.get(id)
+
+    def buscar_por_nome(self, nome):
+        for produto in self.produtos.values():
+            if produto.nome.lower() == nome.lower():
+                return produto
+        return None
+
+    def atualizar_estoque_venda(self, id, quantidade):
+        produto = self.buscar_por_id(id)
+        if produto:
+            if produto.remover_estoque(int(quantidade)):
+                self.salvar_estoque()
+                messagebox.showinfo("Sucesso", f"Venda realizada. Estoque atual: {produto.quantidade}")
+        else:
+            messagebox.showinfo("Erro", "Produto não encontrado.")
+
+    def adicionar_estoque(self, id, quantidade):
+        produto = self.buscar_por_id(id)
+        if produto:
+            try:
+                produto.adicionar_estoque(int(quantidade))
+                self.salvar_estoque()
+                messagebox.showinfo("Sucesso", f"Estoque atualizado: {produto.quantidade}")
+            except ValueError:
+                messagebox.showerror("Erro", "Quantidade deve ser um número inteiro.")
         else:
             messagebox.showinfo("Erro", "Produto não encontrado.")
 
@@ -87,12 +122,18 @@ class GerenciadorEstoque:
         if not self.produtos:
             messagebox.showinfo("Estoque", "Nenhum produto cadastrado.")
             return
-        estoque = "Estoque atual:\n" + "\n".join(str(produto) for produto in self.produtos.values())
+            
+        estoque = "Estoque atual:\n\n" + "\n".join(str(produto) for produto in sorted(
+            self.produtos.values(), key=lambda x: int(x.id)))
         messagebox.showinfo("Estoque", estoque)
 
     def exportar_estoque_excel(self):
-        """Exportar o estoque atual para um arquivo Excel"""
+        if not self.produtos:
+            messagebox.showinfo("Aviso", "Nenhum produto para exportar.")
+            return
+            
         data = {
+            'Id': [produto.id for produto in self.produtos.values()],
             'Nome': [produto.nome for produto in self.produtos.values()],
             'Quantidade': [produto.quantidade for produto in self.produtos.values()],
             'Preço': [produto.preco for produto in self.produtos.values()]
@@ -101,17 +142,24 @@ class GerenciadorEstoque:
 
         try:
             df.to_excel('estoque_exportado.xlsx', index=False, engine='openpyxl')
-            messagebox.showinfo("Sucesso", "Estoque exportado para 'estoque_exportado.xlsx'.")
+            messagebox.showinfo("Sucesso", "Estoque exportado para 'estoque_exportado.xlsx'")
         except Exception as e:
-            messagebox.showerror("Erro", f"Erro ao exportar o estoque: {e}")
+            messagebox.showerror("Erro", f"Falha ao exportar: {str(e)}")
 
     def abrir_excel(self):
-        """Abrir o arquivo Excel exportado"""
+        file_path = 'estoque_exportado.xlsx'
+        if not os.path.exists(file_path):
+            messagebox.showerror("Erro", "Arquivo não encontrado. Exporte o estoque primeiro.")
+            return
+            
         try:
-            # Tenta abrir o arquivo Excel no sistema operacional padrão
-            os.startfile('estoque_exportado.xlsx')
+            if sys.platform == "win32":
+                os.startfile(file_path)
+            else:
+                os.system(f'open "{file_path}"')  # macOS
+                # ou os.system(f'xdg-open "{file_path}"') para Linux
         except Exception as e:
-            messagebox.showerror("Erro", f"Erro ao abrir o arquivo Excel: {e}")
+            messagebox.showerror("Erro", f"Não foi possível abrir o arquivo: {str(e)}")
 
 
 class InterfaceEstoque:
@@ -119,105 +167,140 @@ class InterfaceEstoque:
         self.gerenciador = GerenciadorEstoque()
         self.root = root
         self.root.title("Gerenciador de Estoque")
-
-        self.label_nome = tk.Label(root, text="Nome do Produto:")
-        self.label_nome.grid(row=0, column=0, sticky="w", padx=5, pady=5)
-        self.entry_nome = tk.Entry(root)
-        self.entry_nome.grid(row=0, column=1, sticky="we", padx=5, pady=5)
-
-        self.label_quantidade = tk.Label(root, text="Quantidade:")
-        self.label_quantidade.grid(row=1, column=0, sticky="w", padx=5, pady=5)
-        self.entry_quantidade = tk.Entry(root)
-        self.entry_quantidade.grid(row=1, column=1, sticky="we", padx=5, pady=5)
-
-        self.label_preco = tk.Label(root, text="Preço:")
-        self.label_preco.grid(row=2, column=0, sticky="w", padx=5, pady=5)
-        self.entry_preco = tk.Entry(root)
-        self.entry_preco.grid(row=2, column=1, sticky="we", padx=5, pady=5)
-
-        self.btn_cadastrar = tk.Button(root, text="Cadastrar Produto", command=self.cadastrar_produto)
-        self.btn_cadastrar.grid(row=3, column=0, columnspan=2, sticky="we", padx=5, pady=5)
-
-        self.btn_checar = tk.Button(root, text="Checar Estoque", command=self.checar_estoque)
-        self.btn_checar.grid(row=4, column=0, columnspan=2, sticky="we", padx=5, pady=5)
-
-        self.btn_vender = tk.Button(root, text="Atualizar Estoque para Venda", command=self.atualizar_estoque_venda)
-        self.btn_vender.grid(row=5, column=0, columnspan=2, sticky="we", padx=5, pady=5)
-
-        self.btn_adicionar = tk.Button(root, text="Adicionar ao Estoque", command=self.adicionar_estoque)
-        self.btn_adicionar.grid(row=6, column=0, columnspan=2, sticky="we", padx=5, pady=5)
-
-        self.btn_listar = tk.Button(root, text="Listar Estoque", command=self.listar_estoque)
-        self.btn_listar.grid(row=7, column=0, columnspan=2, sticky="we", padx=5, pady=5)
-
-        # Botão para exportar para Excel
-        self.btn_exportar = tk.Button(root, text="Exportar para Excel", command=self.exportar_excel)
-        self.btn_exportar.grid(row=8, column=0, columnspan=2, sticky="we", padx=5, pady=5)
-
-        # Botão para abrir o arquivo Excel
-        self.btn_abrir_excel = tk.Button(root, text="Abrir Excel", command=self.abrir_excel)
-        self.btn_abrir_excel.grid(row=9, column=0, columnspan=2, sticky="we", padx=5, pady=5)
-
-        # Configuração de redimensionamento
-        self.root.grid_columnconfigure(0, weight=1)  # Coluna 0 redimensionável
-        self.root.grid_columnconfigure(1, weight=2)  # Coluna 1 mais redimensionável
-
-        for i in range(10):  # Configura todas as linhas para redimensionar
+        self.root.geometry("500x600")
+        
+        # Configuração de grid
+        for i in range(12):
             self.root.grid_rowconfigure(i, weight=1)
+        for i in range(2):
+            self.root.grid_columnconfigure(i, weight=1)
+
+        # Frame de busca
+        tk.Label(root, text="Buscar Produto:").grid(row=0, column=0, sticky="w", padx=5, pady=5)
+        
+        self.busca_var = tk.StringVar()
+        self.radio_busca_id = tk.Radiobutton(root, text="Por ID", variable=self.busca_var, value="id")
+        self.radio_busca_id.grid(row=1, column=0, sticky="w", padx=5, pady=2)
+        self.radio_busca_nome = tk.Radiobutton(root, text="Por Nome", variable=self.busca_var, value="nome")
+        self.radio_busca_nome.grid(row=1, column=1, sticky="w", padx=5, pady=2)
+        self.busca_var.set("id")
+        
+        self.entry_busca = tk.Entry(root)
+        self.entry_busca.grid(row=2, column=0, columnspan=2, sticky="we", padx=5, pady=5)
+        
+        self.btn_buscar = tk.Button(root, text="Buscar", command=self.buscar_produto)
+        self.btn_buscar.grid(row=3, column=0, columnspan=2, sticky="we", padx=5, pady=5)
+
+        # Separador
+        ttk.Separator(root, orient='horizontal').grid(row=4, column=0, columnspan=2, sticky="we", pady=10)
+
+        # Frame de cadastro
+        tk.Label(root, text="ID do Produto:").grid(row=5, column=0, sticky="w", padx=5, pady=5)
+        self.entry_id = tk.Entry(root, state='readonly')
+        self.entry_id.grid(row=5, column=1, sticky="we", padx=5, pady=5)
+
+        tk.Label(root, text="Nome do Produto:").grid(row=6, column=0, sticky="w", padx=5, pady=5)
+        self.entry_nome = tk.Entry(root)
+        self.entry_nome.grid(row=6, column=1, sticky="we", padx=5, pady=5)
+
+        tk.Label(root, text="Quantidade:").grid(row=7, column=0, sticky="w", padx=5, pady=5)
+        self.entry_quantidade = tk.Entry(root)
+        self.entry_quantidade.grid(row=7, column=1, sticky="we", padx=5, pady=5)
+
+        tk.Label(root, text="Preço:").grid(row=8, column=0, sticky="w", padx=5, pady=5)
+        self.entry_preco = tk.Entry(root)
+        self.entry_preco.grid(row=8, column=1, sticky="we", padx=5, pady=5)
+
+        # Botões
+        buttons = [
+            ("Cadastrar Produto", self.cadastrar_produto),
+            ("Atualizar Estoque (Venda)", self.atualizar_estoque_venda),
+            ("Adicionar ao Estoque", self.adicionar_estoque),
+            ("Listar Estoque", self.listar_estoque),
+            ("Exportar para Excel", self.exportar_excel),
+            ("Abrir Excel", self.abrir_excel)
+        ]
+
+        for i, (text, command) in enumerate(buttons, start=9):
+            tk.Button(root, text=text, command=command).grid(
+                row=i, column=0, columnspan=2, sticky="we", padx=5, pady=5)
+
+        # Atualiza o ID automaticamente
+        self.atualizar_id()
+
+    def atualizar_id(self):
+        novo_id = self.gerenciador.gerar_novo_id()
+        self.entry_id.config(state='normal')
+        self.entry_id.delete(0, tk.END)
+        self.entry_id.insert(0, str(novo_id))
+        self.entry_id.config(state='readonly')
+
+    def buscar_produto(self):
+        termo = self.entry_busca.get().strip()
+        if not termo:
+            messagebox.showerror("Erro", "Digite um termo para busca.")
+            return
+
+        if self.busca_var.get() == "id":
+            produto = self.gerenciador.buscar_por_id(termo)
+        else:
+            produto = self.gerenciador.buscar_por_nome(termo)
+
+        if produto:
+            self.entry_id.config(state='normal')
+            self.entry_id.delete(0, tk.END)
+            self.entry_id.insert(0, produto.id)
+            self.entry_id.config(state='readonly')
+            
+            self.entry_nome.delete(0, tk.END)
+            self.entry_nome.insert(0, produto.nome)
+            
+            self.entry_quantidade.delete(0, tk.END)
+            self.entry_quantidade.insert(0, str(produto.quantidade))
+            
+            self.entry_preco.delete(0, tk.END)
+            self.entry_preco.insert(0, f"{produto.preco:.2f}")
+            
+            messagebox.showinfo("Sucesso", f"Produto encontrado: {produto.nome}")
+        else:
+            messagebox.showinfo("Erro", "Produto não encontrado.")
 
     def cadastrar_produto(self):
-        nome = self.entry_nome.get()
-        quantidade = self.entry_quantidade.get()
-        preco = self.entry_preco.get()
+        nome = self.entry_nome.get().strip()
+        quantidade = self.entry_quantidade.get().strip()
+        preco = self.entry_preco.get().strip()
 
-        if not nome or not quantidade or not preco:
+        if not all([nome, quantidade, preco]):
             messagebox.showerror("Erro", "Todos os campos devem ser preenchidos.")
             return
 
-        try:
-            quantidade = int(quantidade)
-            preco = float(preco)
-        except ValueError:
-            messagebox.showerror("Erro", "Quantidade deve ser um número inteiro e preço deve ser um número decimal.")
-            return
-
-        self.gerenciador.cadastrar_produto(nome, quantidade, preco)
-
-    def checar_estoque(self):
-        nome = self.entry_nome.get()
-        self.gerenciador.checar_estoque(nome)
+        id_cadastrado = self.gerenciador.cadastrar_produto(nome, quantidade, preco)
+        if id_cadastrado:
+            # Limpa os campos e prepara para novo cadastro
+            self.entry_nome.delete(0, tk.END)
+            self.entry_quantidade.delete(0, tk.END)
+            self.entry_preco.delete(0, tk.END)
+            self.atualizar_id()
 
     def atualizar_estoque_venda(self):
-        nome = self.entry_nome.get()
-        quantidade = self.entry_quantidade.get()
-
-        if not nome or not quantidade:
-            messagebox.showerror("Erro", "Nome e quantidade devem ser preenchidos.")
+        id = self.entry_id.get()
+        quantidade = self.entry_quantidade.get().strip()
+        
+        if not quantidade:
+            messagebox.showerror("Erro", "Quantidade é obrigatória.")
             return
-
-        try:
-            quantidade = int(quantidade)
-        except ValueError:
-            messagebox.showerror("Erro", "Quantidade deve ser um número inteiro.")
-            return
-
-        self.gerenciador.atualizar_estoque_venda(nome, quantidade)
+            
+        self.gerenciador.atualizar_estoque_venda(id, quantidade)
 
     def adicionar_estoque(self):
-        nome = self.entry_nome.get()
-        quantidade = self.entry_quantidade.get()
-
-        if not nome or not quantidade:
-            messagebox.showerror("Erro", "Nome e quantidade devem ser preenchidos.")
+        id = self.entry_id.get()
+        quantidade = self.entry_quantidade.get().strip()
+        
+        if not quantidade:
+            messagebox.showerror("Erro", "Quantidade é obrigatória.")
             return
-
-        try:
-            quantidade = int(quantidade)
-        except ValueError:
-            messagebox.showerror("Erro", "Quantidade deve ser um número inteiro.")
-            return
-
-        self.gerenciador.adicionar_estoque(nome, quantidade)
+            
+        self.gerenciador.adicionar_estoque(id, quantidade)
 
     def listar_estoque(self):
         self.gerenciador.listar_estoque()
@@ -231,6 +314,5 @@ class InterfaceEstoque:
 
 if __name__ == "__main__":
     root = tk.Tk()
-    root.geometry("400x400")  # Ajustado para o novo botão
-    interface = InterfaceEstoque(root)
+    app = InterfaceEstoque(root)
     root.mainloop()
